@@ -13,8 +13,7 @@ app.use(express.json());
 // ✅ Serve frontend files from "public" folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ✅ MySQL Connection
-const mysql = require('mysql2');
+
 
 // Connect using environment variables from Render
 const db = mysql.createConnection({

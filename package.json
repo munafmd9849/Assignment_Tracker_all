@@ -1,0 +1,25 @@
+{
+  "name": "assignment_tracker_all",
+  "version": "1.0.0",
+  "description": "",
+  "main": "db.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/munafmd9849/Assignment_Tracker_all.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/munafmd9849/Assignment_Tracker_all/issues"
+  },
+  "homepage": "https://github.com/munafmd9849/Assignment_Tracker_all#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.1"
+  }
+}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Assignment Tracker - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+  <div class="bg-gray-800 p-8 rounded-2xl shadow-lg w-full max-w-md">
+    <h1 class="text-3xl font-bold mb-6 text-center">Assignment Tracker</h1>
+    
+    <form id="loginForm" class="space-y-4">
+      <label class="block">
+        <span class="text-gray-300">Enter your email:</span>
+        <input
+          type="email"
+          id="email"
+          required
+          class="mt-1 w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </label>
+
+      <button
+        type="submit"
+        class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition"
+      >
+        Continue
+      </button>
+    </form>
+
+    <p id="status" class="mt-4 text-center text-green-400 hidden">Loading...</p>
+  </div>
+
+  <script>
+  const form = document.getElementById("loginForm");
+  const statusText = document.getElementById("status");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email").value.trim();
+    statusText.classList.remove("hidden");
+    statusText.textContent = "Checking user...";
+
+    try {
+      // 1. Register or check user
+      const userRes = await fetch("http://localhost:3000/api/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      console.log("User POST response:", userRes.status);
+      if (!userRes.ok) throw new Error("Failed to register user");
+
+      // 2. Fetch progress
+      const progressRes = await fetch(`http://localhost:3000/api/progress?email=${encodeURIComponent(email)}`);
+      console.log("Progress GET response:", progressRes.status);
+
+      if (!progressRes.ok) throw new Error("Failed to fetch progress");
+
+      const progress = await progressRes.json();
+      console.log("Progress data:", progress);
+
+      // 3. Save and redirect
+      localStorage.setItem("email", email);
+      localStorage.setItem("progress", JSON.stringify(progress));
+      window.location.href = "assignments.html";
+
+    } catch (error) {
+      console.error("Login Error:", error);
+      statusText.textContent = "Something went wrong. Try again.";
+      statusText.classList.remove("text-green-400");
+      statusText.classList.add("text-red-400");
+    }
+  });
+</script>
+
+</body>
+</html>

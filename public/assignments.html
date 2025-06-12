@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-900 text-white">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Assignment Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen px-6 py-8">
+  <h1 class="text-4xl font-bold text-yellow-400 mb-6 text-center">📘 Assignment Tracker</h1>
+
+  <div class="mb-8 text-center">
+    <label class="text-lg font-semibold mr-2">Filter by Platform:</label>
+    <select id="platformFilter" class="p-2 bg-gray-700 text-white rounded-lg mr-4"></select>
+
+    <label class="text-lg font-semibold mr-2">Filter by Status:</label>
+    <select id="statusFilter" class="p-2 bg-gray-700 text-white rounded-lg">
+      <option value="All">All</option>
+      <option value="Solved">Solved</option>
+      <option value="Unsolved">Unsolved</option>
+      <option value="Doubt">Doubt</option>
+      <option value="Reattempt">Reattempt</option>
+    </select>
+  </div>
+
+  <div id="countsDisplay" class="mb-8 text-center"></div>
+  <section id="assignmentsList" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"></section>
+
+  <script>
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTIVsvqCu6tgnal6G7D6WXZksMxLC7wHMUbkEi-9VBwpHw2umKj6obOqjlnvkanm4oLRnIjxqNUJHbn/pub?gid=252917496&single=true&output=csv';
+    const email = localStorage.getItem('email') || '';
+
+    if (!email) {
+      alert('Email not found! Redirecting to login.');
+      window.location.href = 'index.html';
+    }
+
+    const normalizePlatformName = (raw) => {
+      const map = {
+        'leetcode': 'LeetCode',
+        'leet code': 'LeetCode',
+        'geeksforgeeks': 'Geeks for Geeks',
+        'geeks for geeks': 'Geeks for Geeks',
+        'interviewbit': 'Interview Bit',
+        'interview bit': 'Interview Bit',
+        'hackerrank': 'HackerRank',
+        'hacker rank': 'HackerRank',
+      };
+      const key = raw?.toLowerCase().replace(/\s+/g, '');
+      return map[key] || raw;
+    };
+
+    const extractDifficulty = (category) => {
+      const c = category?.toLowerCase() || '';
+      if (c.includes('easy')) return 'Easy';
+      if (c.includes('medium')) return 'Medium';
+      if (c.includes('hard')) return 'Hard';
+      return '';
+    };
+
+    const getDifficultyClass = (difficulty) => {
+      if (difficulty === 'Easy') return 'bg-green-600 text-green-100';
+      if (difficulty === 'Medium') return 'bg-yellow-600 text-yellow-100';
+      if (difficulty === 'Hard') return 'bg-red-600 text-red-100';
+      return 'bg-gray-600 text-gray-100';
+    };
+
+    let progressMap = {}; // { question_id: { solved, doubt, reattempt } }
+
+    async function fetchProgress() {
+      try {
+        const res = await fetch(`/api/progress?email=${email}`);
+        const data = await res.json();
+        data.forEach(({ question_id, solved, doubt, reattempt }) => {
+          progressMap[question_id] = { solved, doubt, reattempt };
+        });
+      } catch (err) {
+        console.error('Error loading progress:', err);
+      }
+    }
+
+    async function saveProgress(question_id, states) {
+      try {
+        await fetch('/api/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, question_id, ...states })
+        });
+      } catch (err) {
+        console.error('Save failed:', err);
+      }
+    }
+
+    function generateCardId(title, platform) {
+      const id = `${title}_${platform}`.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      return id;
+    }
+
+    async function loadAssignmentsFromCSV(url) {
+      const res = await fetch(url);
+      const text = await res.text();
+      return new Promise(resolve => {
+        Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            const data = results.data.map(row => ({
+              ...row,
+              Platform: normalizePlatformName(row.Platform),
+              Difficulty: extractDifficulty(row.Category),
+            }));
+            resolve(data);
+          }
+        });
+      });
+    }
+
+    function populatePlatformFilter(platforms) {
+      const sel = document.getElementById('platformFilter');
+      sel.innerHTML = `<option value="All">All</option>`;
+      platforms.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        sel.appendChild(opt);
+      });
+    }
+
+    function updateView() {
+      const platform = document.getElementById('platformFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      filterCards(platform, status);
+      updateCounts();
+    }
+
+    function filterCards(platform, status) {
+      document.querySelectorAll('#assignmentsList > article').forEach(card => {
+        const matchPlatform = platform === 'All' || card.dataset.platform === platform;
+        const solved = card.querySelector('input[name="solved"]').checked;
+        const doubt = card.querySelector('input[name="doubt"]').checked;
+        const reattempt = card.querySelector('input[name="reattempt"]').checked;
+
+        let matchStatus = true;
+        if (status === 'Solved') matchStatus = solved;
+        else if (status === 'Unsolved') matchStatus = !solved;
+        else if (status === 'Doubt') matchStatus = doubt;
+        else if (status === 'Reattempt') matchStatus = reattempt;
+
+        card.style.display = matchPlatform && matchStatus ? '' : 'none';
+      });
+    }
+
+    function updateCounts() {
+      const cards = document.querySelectorAll('#assignmentsList > article');
+      let total = cards.length, visible = 0, solved = 0, doubt = 0, reattempt = 0;
+      cards.forEach(card => {
+        if (card.style.display !== 'none') {
+          visible++;
+          if (card.querySelector('input[name="solved"]').checked) solved++;
+          if (card.querySelector('input[name="doubt"]').checked) doubt++;
+          if (card.querySelector('input[name="reattempt"]').checked) reattempt++;
+        }
+      });
+
+      document.getElementById('countsDisplay').innerHTML = `
+        <div class="flex justify-center gap-8 flex-wrap text-lg text-gray-300">
+          <div>Total: <span class="font-bold text-yellow-400">${total}</span></div>
+          <div>Visible: <span class="font-bold text-yellow-400">${visible}</span></div>
+          <div>Solved: <span class="font-bold text-green-400">${solved}</span></div>
+          <div>Doubt: <span class="font-bold text-yellow-300">${doubt}</span></div>
+          <div>Reattempt: <span class="font-bold text-red-400">${reattempt}</span></div>
+        </div>`;
+    }
+
+    function createAssignmentCard(assignment) {
+      const {
+        "Problem Name": title,
+        Platform,
+        "Problem Links": link,
+        Category,
+        "Content Covered": topic,
+        "Class Written Notes": notes,
+        "Class Name": className,
+        Date,
+        Difficulty
+      } = assignment;
+
+      if (!title || !Platform) return null;
+
+      const cardId = generateCardId(title, Platform);
+      const state = progressMap[cardId] || { solved: false, doubt: false, reattempt: false };
+
+      const article = document.createElement('article');
+      article.className = `bg-gray-800 rounded-xl p-6 shadow-lg`;
+      article.dataset.platform = Platform;
+
+      article.innerHTML = `
+        <header class="mb-2">
+          <h2 class="text-2xl font-semibold text-yellow-400">
+            <a href="${link?.trim() || '#'}" target="_blank" rel="noopener noreferrer">${title}</a>
+          </h2>
+          <div class="text-sm text-gray-300 space-y-1 mt-1">
+            ${className ? `<div><strong>Class:</strong> ${className}</div>` : ''}
+            ${Date ? `<div><strong>Date:</strong> ${Date}</div>` : ''}
+            ${topic ? `<div><strong>Topic:</strong> ${topic}</div>` : ''}
+            ${Difficulty ? `<div><strong>Difficulty:</strong> <span class="inline-block px-2 py-0.5 rounded ${getDifficultyClass(Difficulty)}">${Difficulty}</span></div>` : ''}
+            ${notes ? `<div><strong>Notes:</strong> ${notes}</div>` : ''}
+            ${Category ? `<div><strong>Category:</strong> ${Category}</div>` : ''}
+            <div><strong>Platform:</strong> ${Platform}</div>
+          </div>
+        </header>
+        <footer class="flex flex-wrap gap-4 mt-4 text-sm">
+          <label><input type="checkbox" name="solved" class="accent-green-500 mr-1" ${state.solved ? 'checked' : ''}/>Solved</label>
+          <label><input type="checkbox" name="doubt" class="accent-yellow-400 mr-1" ${state.doubt ? 'checked' : ''}/>Doubt</label>
+          <label><input type="checkbox" name="reattempt" class="accent-red-400 mr-1" ${state.reattempt ? 'checked' : ''}/>Reattempt</label>
+        </footer>
+      `;
+
+      article.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.addEventListener('change', () => {
+          const newState = {
+            solved: article.querySelector('input[name="solved"]').checked,
+            doubt: article.querySelector('input[name="doubt"]').checked,
+            reattempt: article.querySelector('input[name="reattempt"]').checked
+          };
+          saveProgress(cardId, newState);
+          updateView();
+        });
+      });
+
+      return article;
+    }
+
+    async function init() {
+      await fetchProgress();
+      const data = await loadAssignmentsFromCSV(csvUrl);
+      const platforms = [...new Set(data.map(d => d.Platform).filter(Boolean))].sort();
+      populatePlatformFilter(platforms);
+
+      const container = document.getElementById('assignmentsList');
+      data.forEach(row => {
+        const card = createAssignmentCard(row);
+        if (card) container.appendChild(card);
+      });
+
+      updateView();
+    }
+
+    document.getElementById('statusFilter').addEventListener('change', updateView);
+    document.getElementById('platformFilter').addEventListener('change', updateView);
+
+    init();
+  </script>
+</body>
+</html>

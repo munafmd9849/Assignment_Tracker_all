@@ -22,7 +22,7 @@ const db = mysql.createConnection({
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306 // Railway often uses 3306
+  port: process.env.DB_PORT || 5432 // Railway often uses 3306
 });
 
 db.connect((err) => {
